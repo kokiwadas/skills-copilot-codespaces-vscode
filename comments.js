@@ -1,73 +1,79 @@
 // create web server
-// create a route for /comments
-// send back a response with the correct content type and status code
+const express = require('express');
+const bodyParser = require('body-parser');
+const app = express();
+const port = 3000;
 
-// import http module
-var http = require("http");
-// import fs module
-var fs = require("fs");
-// import path module
-var path = require("path");
-// import url module
-var url = require("url");
+// Add body-parser
+app.use(bodyParser.urlencoded({extended: false}));
+app.use(bodyParser.json());
 
-// create server
-var server = http.createServer(function(request, response) {
-  // get the path
-  var pathname = url.parse(request.url).pathname;
-  // get the extension
-  var extension = path.extname(pathname);
-  // get the content type
-  var contentType = getContentType(extension);
-  // get the status code
-  var statusCode = getStatusCode(pathname);
-  // get the content
-  var content = getContent(pathname);
-  // send the response
-  sendResponse(response, contentType, statusCode, content);
+// Add CORS
+const cors = require('cors');
+app.use(cors());
+
+// Add mongoose
+const mongoose = require('mongoose');
+mongoose.connect('mongodb://localhost:27017/comments', {useNewUrlParser: true, useUnifiedTopology: true});
+
+// Create schema
+const commentSchema = new mongoose.Schema({
+    name: String,
+    comment: String,
+    date: String
 });
 
-// start server
-server.listen(3000);
+// Create model
+const Comment = mongoose.model('Comment', commentSchema);
 
-// get content type
-function getContentType(extension) {
-  switch (extension) {
-    case ".js":
-      return "text/javascript";
-    case ".css":
-      return "text/css";
-    case ".html":
-      return "text/html";
-    default:
-      return "text/plain";
-  }
-}
+// Add route
+app.post('/api/comments', async (req, res) => {
+    const comment = new Comment({
+        name: req.body.name,
+        comment: req.body.comment,
+        date: new Date()
+    });
 
-// get status code
-function getStatusCode(pathname) {
-  switch (pathname) {
-    case "/comments":
-      return 200;
-    case "/bad-request":
-      return 400;
-    case "/forbidden":
-      return 403;
-    case "/internal-server-error":
-      return 500;
-    case "/not-found":
-      return 404;
-    case "/not-implemented":
-      return 501;
-    case "/service-unavailable":
-      return 503;
-    default:
-      return 200;
-  }
-}
+    try {
+        await comment.save();
+        res.send(comment);
+    } catch (error) {
+        console.log(error);
+        res.sendStatus(500);
+    }
+});
 
-// get content
-function getContent(pathname) {
-  switch (pathname) {
-    case "/comments":
-      return JSON.stringify([
+app.get('/api/comments', async (req, res) => {
+    try {
+        let comments = await Comment.find();
+        res.send(comments);
+    } catch (error) {
+        console.log(error);
+        res.sendStatus(500);
+    }
+});
+
+app.delete('/api/comments/:id', async (req, res) => {
+    try {
+        await Comment.deleteOne({_id: req.params.id});
+        res.sendStatus(200);
+    } catch (error) {
+        console.log(error);
+        res.sendStatus(500);
+    }
+});
+
+app.put('/api/comments/:id', async (req, res) => {
+    try {
+        let comment = await Comment.findOne({_id: req.params.id});
+        comment.name = req.body.name;
+        comment.comment = req.body.comment;
+        await comment.save();
+        res.sendStatus(200);
+    } catch (error) {
+        console.log(error);
+        res.sendStatus(500);
+    }
+});
+
+app.listen(port, () => console.log(`Server listening on port ${port}!`));
